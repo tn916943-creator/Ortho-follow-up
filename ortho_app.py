@@ -1,4 +1,3 @@
-
 import streamlit as st
 import google.generativeai as genai
 import qrcode
@@ -112,10 +111,8 @@ if generate_btn:
                 rehab_match = re.search(r'<rehab_guide>(.*?)</rehab_guide>', output_text, re.DOTALL)
                 letter_match = re.search(r'<care_letter>(.*?)</care_letter>', output_text, re.DOTALL)
 
-                rehab_text = rehab_match.group(1).strip() if rehab_match else "無法正確解析復健指引，請重試。
-" + output_text
-                letter_text = letter_match.group(1).strip() if letter_match else "無法正確解析關懷信件，請重試。
-" + output_text
+                rehab_text = rehab_match.group(1).strip() if rehab_match else "無法正確解析復健指引，請重試。\n" + output_text
+                letter_text = letter_match.group(1).strip() if letter_match else "無法正確解析關懷信件，請重試。\n" + output_text
 
                 tab1, tab2, tab3 = st.tabs(["📋 復健指引", "💌 關懷信件", "📱 給病人掃描的 QR Code"])
 
@@ -125,11 +122,7 @@ if generate_btn:
                     st.markdown(letter_text)
                 with tab3:
                     st.warning("💡 請病人掃描下方 QR Code 即可將文字存入手機中。")
-                    combined_text = f"【專屬復健指引】
-{rehab_text}
-
-【醫師關懷信】
-{letter_text}"
+                    combined_text = f"【專屬復健指引】\n{rehab_text}\n\n【醫師關懷信】\n{letter_text}"
 
                     qr = qrcode.QRCode(version=1, box_size=10, border=4)
                     qr.add_data(combined_text[:1500]) # 放寬字數限制
