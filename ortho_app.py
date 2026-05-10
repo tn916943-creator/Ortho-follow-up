@@ -76,9 +76,9 @@ if generate_btn:
         if smoke_habit: comorbidities.append("抽菸習慣")
         comorb_text = "無" if not comorbidities else "、".join(comorbidities)
 
-        # 稱謂推斷（年齡 ≥ 60 → 長輩稱謂）
+        # 稱謂推斷（年齡 ≥ 70 → 長輩稱謂）
         name_text = patient_name if patient_name else ""
-        if age >= 60:
+        if age >= 70:
             honorific = f"{name_text}阿伯" if gender == "男性" else f"{name_text}阿姨"
         else:
             honorific = f"{name_text}先生" if gender == "男性" else f"{name_text}小姐"
@@ -113,7 +113,7 @@ if generate_btn:
   🚨 立刻回診的警示（2 項）
 
 - 關懷信件：100～150 字，溫暖簡短，病患站在診間門口能一分鐘內讀完。
-  結尾署名固定為：「您的骨科主治醫師 李天慶 敬上」
+  結尾署名固定為：「您的骨科主治醫師 李天慶」
 
 【輸出格式（必須嚴格遵守 XML 標籤）】
 <rehab_guide>
@@ -135,13 +135,13 @@ if generate_btn:
             rehab_text  = rehab_match.group(1).strip()  if rehab_match  else "⚠️ 解析失敗，請重試。\n\n" + output_text
             letter_text = letter_match.group(1).strip() if letter_match else "⚠️ 解析失敗，請重試。\n\n" + output_text
 
-            tab1, tab2, tab3 = st.tabs(["📋 復健指引", "💌 關懷信件", "📱 QR Code（給病患掃描）"])
+            tab1, tab2, tab3 = st.tabs(["💌 關懷信件", "📋 復健指引", "📱 QR Code（給病患掃描）"])
 
             with tab1:
-                st.markdown(rehab_text)
+                st.markdown(letter_text)
 
             with tab2:
-                st.markdown(letter_text)
+                st.markdown(rehab_text)
 
             with tab3:
                 st.info("💡 請讓病患掃描下方 QR Code，即可將內容存入手機。")
