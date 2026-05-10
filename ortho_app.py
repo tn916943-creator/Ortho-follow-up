@@ -111,7 +111,7 @@ if generate_btn:
         # 稱謂推斷（年齡 ≥ 70 → 長輩稱謂）
         name_text = patient_name if patient_name else ""
         if age >= 70:
-            honorific = f"{name_text}阿伯" if gender == "男性" else f"{name_text}阿姨"
+            honorific = f"{name_text}伯伯" if gender == "男性" else f"{name_text}阿姨"
         else:
             honorific = f"{name_text}先生" if gender == "男性" else f"{name_text}小姐"
 
@@ -145,7 +145,7 @@ if generate_btn:
   🚨 立刻回診的警示（2 項）
 
 - 關懷信件：100～150 字，溫暖簡短，病患站在診間門口能一分鐘內讀完。
-  結尾署名固定為：「您的骨科主治醫師 李天慶」
+  結尾署名固定為：「您的骨科醫師 李天慶」
 
 【輸出格式（必須嚴格遵守 XML 標籤）】
 <rehab_guide>
