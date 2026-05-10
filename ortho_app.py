@@ -2,13 +2,14 @@
 import streamlit as st
 import google.generativeai as genai
 import qrcode
+import re
 from io import BytesIO
 
 # 系統介面設定
 st.set_page_config(page_title="骨科復健與關懷系統", page_icon="🦴", layout="wide")
 
-st.title("🦴 骨科專屬復健與關懷系統 (診間單向推播版)")
-st.markdown("輸入病患狀況，自動生成**復健指引**與**專屬關懷信**，並直接產生 **QR Code** 讓病患掃描帶走。")
+st.title("🦴 骨科專屬復健與關懷系統 (診間推播版)")
+st.markdown("輸入病患狀況，自動生成**復健指引**與**專屬關懷長信**，並直接產生 **QR Code** 讓病患掃描帶走。")
 
 # 左側邊欄 - 設定與輸入
 with st.sidebar:
@@ -16,20 +17,25 @@ with st.sidebar:
     api_key = st.text_input("輸入 Gemini API Key", type="password")
 
     st.header("📋 基本資訊")
+    patient_name = st.text_input("病患姓氏或姓名 (選填)", placeholder="例如：陳, 王大明")
     age = st.number_input("病患年齡", min_value=1, max_value=120, value=65)
     gender = st.selectbox("性別", ["女性", "男性"])
 
     st.header("🦴 手術與傷口狀況")
     surgery_part = st.selectbox("手術/受傷部位", [
-        "橈骨遠端骨折 (手腕)", 
-        "大拇指腕掌關節", 
-        "髖關節骨折", 
-        "膝關節置換/鏡檢", 
-        "脊椎手術", 
-        "腳踝/足部骨折",
-        "其他"
+        # 上肢
+        "鎖骨/近端肱骨骨折", "肱骨幹骨折", "遠端肱骨/肘部骨折", "前臂骨折", 
+        "橈骨遠端骨折 (手腕)", "掌指骨折", "大拇指腕掌關節",
+        # 下肢與骨盆
+        "骨盆骨折", "髖關節骨折 - 內固定手術", "髖關節骨折 - 人工關節置換手術", 
+        "股骨骨折", "臏骨骨折", "近端脛骨骨折", "脛骨幹骨折", 
+        "膝關節置換/鏡檢", "腳踝/足部骨折",
+        # 關節鏡與其他
+        "腕關節鏡", "肩關節鏡", "脊椎手術", 
+        "移除內固定", "清創", "神經減壓", "肌腱縫合", "血管/神經吻合", 
+        "腫瘤切除/切片", "其他"
     ])
-    trauma_type = st.selectbox("受傷原因", ["低能量跌倒", "高能量車禍/創傷", "退化性疾病", "運動傷害"])
+    trauma_type = st.selectbox("受傷原因", ["低能量跌倒", "高能量車禍/創傷", "退化性疾病", "運動傷害", "職業/工作傷害"])
     post_op_weeks = st.number_input("術後/受傷週數", min_value=0, max_value=52, value=2)
     sutures_removed = st.radio("傷口拆線狀況", ["未拆線 (需保持乾燥)", "已拆線 (可碰水)"])
 
@@ -48,10 +54,8 @@ if generate_btn:
     if not api_key:
         st.error("請先在左側輸入您的 Gemini API Key！")
     else:
-        with st.spinner("AI 醫師助理正在綜合評估共病風險並撰寫專屬內容..."):
+        with st.spinner("AI 醫師助理正在綜合評估臨床變數，為您撰寫專屬長信與指引..."):
             genai.configure(api_key=api_key)
-
-            # 使用最新的穩定且有免費額度的 Gemini 2.5 Flash
             model = genai.GenerativeModel("models/gemini-2.5-flash")
 
             # 將勾選的共病轉換為文字敘述
@@ -62,12 +66,14 @@ if generate_btn:
             if smoke_habit: comorbidities.append("抽菸習慣")
 
             comorb_text = "無明顯影響癒合之共病" if not comorbidities else "、".join(comorbidities)
+            name_text = patient_name if patient_name else "病患"
 
-            # 設計 System Prompt (更精密的臨床人設與判斷)
+            # 設計 System Prompt (加入 XML 標籤防呆，並要求加長信件)
             prompt = f'''
             你是一位台灣醫學中心專業且溫暖的骨科醫師。請根據以下病患資料，生成一份高度個人化的復健指引與關懷信。
 
             【病患臨床資料】
+            姓名：{name_text}
             基本資料：{age}歲 {gender}
             部位：{surgery_part}
             原因：{trauma_type}
@@ -76,35 +82,40 @@ if generate_btn:
             影響癒合之共病/習慣：{comorb_text}
             醫師特別叮嚀：{notes}
 
-            【臨床推理要求】
-            1. 必須考慮「共病」對癒合的影響。若有糖尿病，必須提醒控制血糖對傷口/骨頭癒合的重要性；若有抽菸，必須提醒尼古丁會延緩骨頭癒合；若有骨鬆，必須提醒防跌。
-            2. 必須考慮「拆線狀況」。若未拆線，必須強調傷口不可碰水與觀察紅腫熱痛。
-            3. 若為高能量創傷，需適度安撫病患創傷後的心理壓力。
+            【臨床推理與寫作要求】
+            1. 復健指引：需精準、條列式。包含本週日常活動與禁忌、居家復健動作(次數)、傷口與共病管理(DM/CKD/抽菸/防跌)、立即回診徵象。
+            2. 關懷信件：
+               - 必須是一封字數至少 250~350 字的長信。
+               - 請根據姓名與年齡加上適當尊稱（如：陳伯伯、王小姐）。
+               - 請詳細說明「目前這週數的組織癒合狀況」，並解釋為何要遵守指引中的禁忌，讓病患了解「為什麼要這麼做」。
+               - 針對受傷原因給予同理心（如：安撫車禍驚嚇、體恤職業傷害的焦慮、鼓勵退化性疾病的復健）。
+               - 將冷冰冰的醫囑(如戒菸、控糖)轉化為溫暖的鼓勵。
+               - 結尾署名：「您的骨科醫師 關心您」。
 
-            【輸出格式要求】
-            請嚴格輸出兩個段落，並用「---」分隔：
+            【嚴格輸出格式】
+            請務必使用以下 XML 標籤包覆兩部分的內容，方便系統正確擷取：
 
-            第一部分：復健與照護指引 (標題：📋 專屬復健與照護指引)
-            - 本週允許的日常活動與禁忌。
-            - 居家復健動作 (請具體描述動作與建議次數)。
-            - 傷口照護與共病管理提醒 (融合前述的 DM/CKD/抽菸/拆線等狀態)。
-            - 需立即回診的警示徵象。
+            <rehab_guide>
+            (這裡放入排版好的條列式復健指引)
+            </rehab_guide>
 
-            ---
-            第二部分：專屬關懷信件 (標題：💌 醫師關懷信)
-            - 語氣必須溫暖、親切，稱呼長輩為伯伯/阿姨，年輕人為先生/小姐。
-            - 使用台灣醫療用語 (回診、復健、主治醫師、血糖控制)。
-            - 將冷冰冰的醫囑轉化為關心的話語。例如「因為您有糖尿病，我們更要注意傷口...」。
-            - 結尾署名：「您的骨科醫師 關心您」
+            <care_letter>
+            (這裡放入豐富溫暖的關懷長信)
+            </care_letter>
             '''
 
             try:
                 response = model.generate_content(prompt)
                 output_text = response.text
 
-                parts = output_text.split("---")
-                rehab_text = parts[0].strip() if len(parts) > 0 else output_text
-                letter_text = parts[1].strip() if len(parts) > 1 else "生成格式錯誤，請再試一次。"
+                # 使用正則表達式精準擷取
+                rehab_match = re.search(r'<rehab_guide>(.*?)</rehab_guide>', output_text, re.DOTALL)
+                letter_match = re.search(r'<care_letter>(.*?)</care_letter>', output_text, re.DOTALL)
+
+                rehab_text = rehab_match.group(1).strip() if rehab_match else "無法正確解析復健指引，請重試。
+" + output_text
+                letter_text = letter_match.group(1).strip() if letter_match else "無法正確解析關懷信件，請重試。
+" + output_text
 
                 tab1, tab2, tab3 = st.tabs(["📋 復健指引", "💌 關懷信件", "📱 給病人掃描的 QR Code"])
 
@@ -114,10 +125,14 @@ if generate_btn:
                     st.markdown(letter_text)
                 with tab3:
                     st.warning("💡 請病人掃描下方 QR Code 即可將文字存入手機中。")
-                    combined_text = f"{rehab_text}\n\n{letter_text}"
+                    combined_text = f"【專屬復健指引】
+{rehab_text}
+
+【醫師關懷信】
+{letter_text}"
 
                     qr = qrcode.QRCode(version=1, box_size=10, border=4)
-                    qr.add_data(combined_text[:800])
+                    qr.add_data(combined_text[:1500]) # 放寬字數限制
                     qr.make(fit=True)
 
                     img = qr.make_image(fill_color="black", back_color="white")
@@ -126,27 +141,4 @@ if generate_btn:
                     st.image(buf.getvalue(), width=350)
 
             except Exception as e:
-                # 備用方案
-                st.error(f"發生錯誤：{e}\n正在嘗試切換備用模型...")
-                try:
-                    fallback_model = genai.GenerativeModel("models/gemini-2.5-flash-lite")
-                    response = fallback_model.generate_content(prompt)
-                    output_text = response.text
-                    parts = output_text.split("---")
-                    rehab_text = parts[0].strip() if len(parts) > 0 else output_text
-                    letter_text = parts[1].strip() if len(parts) > 1 else "生成錯誤。"
-
-                    tab1, tab2, tab3 = st.tabs(["📋 復健指引", "💌 關懷信件", "📱 QR Code"])
-                    with tab1: st.markdown(rehab_text)
-                    with tab2: st.markdown(letter_text)
-                    with tab3:
-                        combined_text = f"{rehab_text}\n\n{letter_text}"
-                        qr = qrcode.QRCode(version=1, box_size=10, border=4)
-                        qr.add_data(combined_text[:800])
-                        qr.make(fit=True)
-                        img = qr.make_image(fill_color="black", back_color="white")
-                        buf = BytesIO()
-                        img.save(buf, format="PNG")
-                        st.image(buf.getvalue(), width=350)
-                except Exception as fallback_e:
-                    st.error("模型連線失敗，請檢查 API Key 是否正確或是否有免費額度。")
+                st.error(f"發生錯誤：{e}\n請檢查 API Key 是否正確或是否有免費額度。")
