@@ -51,8 +51,8 @@ if generate_btn:
         with st.spinner("AI 醫師助理正在綜合評估共病風險並撰寫專屬內容..."):
             genai.configure(api_key=api_key)
 
-# 使用穩定的 Gemini 1.5 Flash 免費版
-model = genai.GenerativeModel("gemini-1.5-flash")
+            # 使用穩定的 Gemini 1.5 Flash 免費版
+            model = genai.GenerativeModel("gemini-1.5-flash")
 
             # 將勾選的共病轉換為文字敘述
             comorbidities = []
@@ -129,7 +129,7 @@ model = genai.GenerativeModel("gemini-1.5-flash")
                 # 備用方案
                 st.error(f"發生錯誤：{e}\n正在嘗試切換備用模型...")
                 try:
-fallback_model = genai.GenerativeModel("gemini-1.5-flash")
+                    fallback_model = genai.GenerativeModel("gemini-1.5-flash")
                     response = fallback_model.generate_content(prompt)
                     output_text = response.text
                     parts = output_text.split("---")
