@@ -9,19 +9,49 @@ from io import BytesIO
 # ─────────────────────────────────────────
 st.set_page_config(page_title="骨科復健與關懷系統", page_icon="🦴", layout="wide")
 
+# ─────────────────────────────────────────
+# 密碼保護（Streamlit Cloud 版）
+# 密碼存在 Streamlit Cloud 後台的 Secrets，不寫死在程式裡
+# ─────────────────────────────────────────
+def check_password():
+    if "authenticated" not in st.session_state:
+        st.session_state.authenticated = False
+
+    if st.session_state.authenticated:
+        return True
+
+    st.title("🦴 骨科復健與關懷系統")
+    st.markdown("---")
+    col1, col2, col3 = st.columns([1, 2, 1])
+    with col2:
+        st.markdown("### 🔐 請輸入診間密碼")
+        pwd = st.text_input("密碼", type="password", placeholder="請向李天慶醫師索取")
+        if st.button("登入", use_container_width=True):
+            if pwd == st.secrets["APP_PASSWORD"]:
+                st.session_state.authenticated = True
+                st.rerun()
+            else:
+                st.error("密碼錯誤，請重新輸入。")
+    return False
+
+if not check_password():
+    st.stop()
+
+# ─────────────────────────────────────────
+# 主畫面（通過密碼後才顯示）
+# ─────────────────────────────────────────
 st.title("🦴 骨科專屬復健與關懷系統")
 st.markdown("輸入病患狀況，自動生成**精簡復健指引**與**專屬關懷信**，並產生 **QR Code** 讓病患掃描帶走。")
 
+# 從 Streamlit Cloud Secrets 讀取 API Key，不需要使用者輸入
+api_key = st.secrets["GEMINI_API_KEY"]
+
 # ─────────────────────────────────────────
-# 左側邊欄 - 設定與輸入
+# 左側邊欄 - 病患資料輸入
 # ─────────────────────────────────────────
 with st.sidebar:
-    st.header("⚙️ 系統設定")
-    api_key = st.text_input("輸入 Gemini API Key", type="password",
-                             help="Key 僅用於本次產生，不會被儲存。")
-
     st.header("📋 基本資訊")
-    patient_name = st.text_input("病患姓氏或姓名（選填）", placeholder="例如：陳、王大明")
+    patient_name = st.text_input("病患姓氏（選填）", placeholder="例如：陳、王")
     age = st.number_input("病患年齡", min_value=1, max_value=120, value=65)
     gender = st.selectbox("性別", ["女性", "男性"])
 
@@ -46,23 +76,25 @@ with st.sidebar:
     sutures_removed = st.radio("傷口拆線狀況", ["未拆線（需保持乾燥）", "已拆線（可碰水）"])
 
     st.header("🩺 共病與生活習慣（影響癒合）")
-    has_osteo  = st.checkbox("骨質疏鬆（T-score < −2.5）")
-    has_dm     = st.checkbox("糖尿病（DM）")
-    has_ckd    = st.checkbox("慢性腎臟病（CKD）")
-    smoke_habit= st.checkbox("有抽菸習慣")
+    has_osteo   = st.checkbox("骨質疏鬆（T-score < −2.5）")
+    has_dm      = st.checkbox("糖尿病（DM）")
+    has_ckd     = st.checkbox("慢性腎臟病（CKD）")
+    smoke_habit = st.checkbox("有抽菸習慣")
 
     notes = st.text_area("醫師特別叮嚀（選填）", placeholder="例如：不能提大於 1 公斤重物…")
 
     generate_btn = st.button("🚀 生成指引與 QR Code", use_container_width=True)
 
+    # 登出按鈕
+    st.markdown("---")
+    if st.button("🚪 登出", use_container_width=True):
+        st.session_state.authenticated = False
+        st.rerun()
+
 # ─────────────────────────────────────────
 # 核心邏輯
 # ─────────────────────────────────────────
 if generate_btn:
-    if not api_key:
-        st.error("請先在左側輸入您的 Gemini API Key！")
-        st.stop()
-
     with st.spinner("李天慶醫師助理正在為您撰寫個人化指引…"):
 
         genai.configure(api_key=api_key)
@@ -129,8 +161,8 @@ if generate_btn:
             response = model.generate_content(prompt)
             output_text = response.text
 
-            rehab_match  = re.search(r'<rehab_guide>(.*?)</rehab_guide>',   output_text, re.DOTALL)
-            letter_match = re.search(r'<care_letter>(.*?)</care_letter>',   output_text, re.DOTALL)
+            rehab_match  = re.search(r'<rehab_guide>(.*?)</rehab_guide>', output_text, re.DOTALL)
+            letter_match = re.search(r'<care_letter>(.*?)</care_letter>', output_text, re.DOTALL)
 
             rehab_text  = rehab_match.group(1).strip()  if rehab_match  else "⚠️ 解析失敗，請重試。\n\n" + output_text
             letter_text = letter_match.group(1).strip() if letter_match else "⚠️ 解析失敗，請重試。\n\n" + output_text
@@ -146,15 +178,13 @@ if generate_btn:
             with tab3:
                 st.info("💡 請讓病患掃描下方 QR Code，即可將內容存入手機。")
 
-                # QR Code 只放關懷信件（字數精簡，掃描成功率高）
-                qr_content = f"【李天慶醫師專屬復健指引】\n{rehab_text}\n\n【醫師關懷信】\n{letter_text}"
+                qr_content = f"【李天慶醫師關懷信】\n{letter_text}\n\n【專屬復健指引】\n{rehab_text}"
 
-                # 超過 800 字則截斷並提示
                 if len(qr_content) > 800:
                     qr_content = qr_content[:800] + "\n…（請向護理站索取完整版）"
 
                 qr = qrcode.QRCode(
-                    version=None,          # 自動選擇最小版本
+                    version=None,
                     error_correction=qrcode.constants.ERROR_CORRECT_L,
                     box_size=8,
                     border=4,
@@ -167,7 +197,6 @@ if generate_btn:
                 img.save(buf, format="PNG")
                 st.image(buf.getvalue(), width=320)
 
-                # 同時提供純文字複製區
                 with st.expander("📄 展開純文字（可複製）"):
                     st.text(qr_content)
 
