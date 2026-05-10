@@ -167,38 +167,96 @@ if generate_btn:
             rehab_text  = rehab_match.group(1).strip()  if rehab_match  else "⚠️ 解析失敗，請重試。\n\n" + output_text
             letter_text = letter_match.group(1).strip() if letter_match else "⚠️ 解析失敗，請重試。\n\n" + output_text
 
-            tab1, tab2, tab3 = st.tabs(["💌 關懷信件", "📋 復健指引", "📱 QR Code（給病患掃描）"])
-
-            with tab1:
-                st.markdown(letter_text)
-
-            with tab2:
-                st.markdown(rehab_text)
-
-            with tab3:
-                st.info("💡 請讓病患掃描下方 QR Code，即可將內容存入手機。")
-
-                qr_content = f"【李天慶醫師關懷信】\n{letter_text}\n\n【專屬復健指引】\n{rehab_text}"
-
-                if len(qr_content) > 800:
-                    qr_content = qr_content[:800] + "\n…（請向護理站索取完整版）"
-
-                qr = qrcode.QRCode(
-                    version=None,
-                    error_correction=qrcode.constants.ERROR_CORRECT_L,
-                    box_size=8,
-                    border=4,
-                )
-                qr.add_data(qr_content)
-                qr.make(fit=True)
-
-                img = qr.make_image(fill_color="black", back_color="white")
-                buf = BytesIO()
-                img.save(buf, format="PNG")
-                st.image(buf.getvalue(), width=320)
-
-                with st.expander("📄 展開純文字（可複製）"):
-                    st.text(qr_content)
+            # 將結果存入 session_state，供後續審閱與 QR Code 使用
+            st.session_state["rehab_text"]  = rehab_text
+            st.session_state["letter_text"] = letter_text
+            st.session_state["qr_approved"] = False  # 每次重新生成都需重新審閱
 
         except Exception as e:
             st.error(f"發生錯誤：{e}\n請確認 API Key 是否正確，或目前是否有可用額度。")
+
+# ─────────────────────────────────────────
+# 審閱區（生成後才顯示）
+# ─────────────────────────────────────────
+if "rehab_text" in st.session_state and "letter_text" in st.session_state:
+
+    st.markdown("---")
+    st.subheader("🩺 醫師審閱區｜請確認內容後再釋出給病患")
+    st.caption("您可以直接在下方文字框修改 AI 產出的內容，確認無誤後再按「核准釋出」。")
+
+    col_left, col_right = st.columns(2)
+
+    with col_left:
+        st.markdown("**💌 關懷信件**")
+        edited_letter = st.text_area(
+            label="關懷信件（可直接修改）",
+            value=st.session_state["letter_text"],
+            height=220,
+            label_visibility="collapsed"
+        )
+
+    with col_right:
+        st.markdown("**📋 復健指引**")
+        edited_rehab = st.text_area(
+            label="復健指引（可直接修改）",
+            value=st.session_state["rehab_text"],
+            height=220,
+            label_visibility="collapsed"
+        )
+
+    st.markdown("&nbsp;")
+
+    approve_btn = st.button("✅ 內容確認無誤，核准釋出 QR Code", type="primary", use_container_width=True)
+
+    if approve_btn:
+        st.session_state["qr_approved"]     = True
+        st.session_state["final_letter"]    = edited_letter
+        st.session_state["final_rehab"]     = edited_rehab
+
+    # ─────────────────────────────────────────
+    # QR Code 區（核准後才顯示）
+    # ─────────────────────────────────────────
+    if st.session_state.get("qr_approved"):
+
+        st.markdown("---")
+        st.subheader("📱 病患專屬 QR Code")
+        st.success("✅ 醫師已核准，此內容可交給病患。")
+
+        final_letter = st.session_state["final_letter"]
+        final_rehab  = st.session_state["final_rehab"]
+
+        tab1, tab2, tab3 = st.tabs(["💌 關懷信件（最終版）", "📋 復健指引（最終版）", "📱 QR Code"])
+
+        with tab1:
+            st.markdown(final_letter)
+
+        with tab2:
+            st.markdown(final_rehab)
+
+        with tab3:
+            st.info("💡 請讓病患掃描下方 QR Code，即可將內容存入手機。")
+
+            qr_content = f"【李天慶醫師關懷信】\n{final_letter}\n\n【專屬復健指引】\n{final_rehab}"
+
+            if len(qr_content) > 800:
+                qr_content = qr_content[:800] + "\n…（請向護理站索取完整版）"
+
+            qr = qrcode.QRCode(
+                version=None,
+                error_correction=qrcode.constants.ERROR_CORRECT_L,
+                box_size=8,
+                border=4,
+            )
+            qr.add_data(qr_content)
+            qr.make(fit=True)
+
+            img = qr.make_image(fill_color="black", back_color="white")
+            buf = BytesIO()
+            img.save(buf, format="PNG")
+
+            col_qr, col_text = st.columns([1, 1])
+            with col_qr:
+                st.image(buf.getvalue(), width=280)
+            with col_text:
+                st.markdown("**📄 純文字（可複製給病患）**")
+                st.text(qr_content)
