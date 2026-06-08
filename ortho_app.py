@@ -334,7 +334,6 @@ if "rehab_text" in st.session_state and "letter_text" in st.session_state:
   </div>
 
   <div class="footer">
-    本衛教單由 AI 輔助生成，經李天慶醫師審閱確認，請以主治醫師指示為準。<br>
     骨科門診諮詢：(07) 312-1101 轉 7841
   </div>
 </body>
