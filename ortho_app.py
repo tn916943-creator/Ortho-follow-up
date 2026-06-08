@@ -227,7 +227,7 @@ if "rehab_text" in st.session_state and "letter_text" in st.session_state:
         final_letter = st.session_state["final_letter"]
         final_rehab  = st.session_state["final_rehab"]
 
-        tab1, tab2, tab3 = st.tabs(["💌 關懷信件（最終版）", "📋 復健指引（最終版）", "📱 QR Code"])
+        tab1, tab2, tab3, tab4 = st.tabs(["💌 關懷信件（最終版）", "📋 復健指引（最終版）", "📱 QR Code", "🖨️ 列印衛教單"])
 
         with tab1:
             st.markdown(final_letter)
@@ -262,3 +262,111 @@ if "rehab_text" in st.session_state and "letter_text" in st.session_state:
             with col_text:
                 st.markdown("**📄 純文字（可複製給病患）**")
                 st.text(qr_content)
+
+        with tab4:
+            st.info("💡 點選下方按鈕，瀏覽器會開啟列印視窗，可直接印出給病患。")
+
+            # 將復健指引換行轉為 HTML
+            rehab_html = final_rehab.replace("\n", "<br>")
+            letter_html = final_letter.replace("\n", "<br>")
+
+            # 產生列印用 HTML 頁面
+            print_html = f"""
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<style>
+  body {{
+    font-family: "Noto Sans TC", "Microsoft JhengHei", sans-serif;
+    max-width: 680px;
+    margin: 40px auto;
+    padding: 0 24px;
+    color: #1a1a1a;
+    font-size: 15px;
+    line-height: 1.8;
+  }}
+  .header {{
+    text-align: center;
+    border-bottom: 2px solid #1a3c6e;
+    padding-bottom: 12px;
+    margin-bottom: 24px;
+  }}
+  .header h2 {{
+    color: #1a3c6e;
+    margin: 0 0 4px 0;
+    font-size: 20px;
+  }}
+  .header p {{
+    margin: 0;
+    color: #555;
+    font-size: 13px;
+  }}
+  .section {{
+    margin-bottom: 28px;
+  }}
+  .section-title {{
+    font-size: 15px;
+    font-weight: bold;
+    color: #1a3c6e;
+    border-left: 4px solid #1a3c6e;
+    padding-left: 10px;
+    margin-bottom: 12px;
+  }}
+  .content {{
+    background: #f8f9fb;
+    border-radius: 8px;
+    padding: 16px 20px;
+    white-space: pre-wrap;
+  }}
+  .footer {{
+    text-align: center;
+    font-size: 12px;
+    color: #888;
+    border-top: 1px solid #ddd;
+    padding-top: 12px;
+    margin-top: 32px;
+  }}
+  @media print {{
+    body {{ margin: 20px; }}
+    button {{ display: none; }}
+  }}
+</style>
+</head>
+<body>
+  <div class="header">
+    <h2>🏥 高雄醫學大學附設醫院 骨科部</h2>
+    <p>病患專屬衛教單｜李天慶醫師</p>
+  </div>
+
+  <div class="section">
+    <div class="section-title">💌 醫師關懷信</div>
+    <div class="content">{letter_html}</div>
+  </div>
+
+  <div class="section">
+    <div class="section-title">📋 專屬復健指引</div>
+    <div class="content">{rehab_html}</div>
+  </div>
+
+  <div class="footer">
+    本衛教單由 AI 輔助生成，經李天慶醫師審閱確認，請以主治醫師指示為準。<br>
+    骨科門診諮詢：(07) 312-1101 轉 7841
+  </div>
+
+  <script>window.print();</script>
+</body>
+</html>
+"""
+
+            import base64
+            b64 = base64.b64encode(print_html.encode("utf-8")).decode()
+            href = f'data:text/html;charset=utf-8;base64,{b64}'
+
+            st.markdown(
+                f'<a href="{href}" target="_blank">'
+                f'<button style="background:#1a3c6e;color:white;padding:12px 28px;'
+                f'border:none;border-radius:8px;font-size:16px;cursor:pointer;width:100%;">'
+                f'🖨️ 開啟列印視窗</button></a>',
+                unsafe_allow_html=True
+            )
